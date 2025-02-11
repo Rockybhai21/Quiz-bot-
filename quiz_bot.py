@@ -89,8 +89,16 @@ def button_handler(update: Update, context: CallbackContext):
 
 # Main function
 def main():
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("create_quiz", create_quiz))
+app.add_handler(CommandHandler("my_quizzes", my_quizzes))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+print("Bot is running...")
+app.run_polling()
+
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("create_quiz", create_quiz))
     dp.add_handler(CommandHandler("my_quizzes", my_quizzes))
