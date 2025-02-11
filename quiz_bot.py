@@ -1,8 +1,7 @@
 import requests
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-import requests
-import logging
+import threading
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 from config import GEMINI_API_KEY, PEXELS_API_KEY, TELEGRAM_BOT_TOKEN
@@ -10,6 +9,13 @@ from config import GEMINI_API_KEY, PEXELS_API_KEY, TELEGRAM_BOT_TOKEN
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Flask app to keep the bot alive on Koyeb free plan
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot is running!"
 
 # Dictionary to store quizzes for users
 user_quizzes = {}
@@ -90,18 +96,23 @@ def button_handler(update: Update, context: CallbackContext):
     elif query.data == "close":
         query.message.delete()
 
+# Run Flask server
+def run_flask():
+    app.run(host="0.0.0.0", port=8080)
+
 # Main function
 def main():
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    bot_app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("create_quiz", create_quiz))
-    app.add_handler(CommandHandler("my_quizzes", my_quizzes))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
+    bot_app.add_handler(CommandHandler("start", start))
+    bot_app.add_handler(CommandHandler("create_quiz", create_quiz))
+    bot_app.add_handler(CommandHandler("my_quizzes", my_quizzes))
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    bot_app.add_handler(CallbackQueryHandler(button_handler))
     
     print("Bot is running...")
-    app.run_polling(timeout=30, stop_signals=None)
+    threading.Thread(target=run_flask).start()  # Start Flask in a separate thread
+    bot_app.run_polling(timeout=30, stop_signals=None)
 
 if __name__ == "__main__":
     main()
