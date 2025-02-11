@@ -8,7 +8,7 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Google Gemini AI API Key
-GEMINI_API_KEY = os.getenv("AIzaSyCJnbD30bgcfmG_SkQ5G8eFciq-YgCBarY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Pexels API Key
-PEXELS_API_KEY = os.getenv("uUl7VsSwswOyeLO9ay24Ij4SYIFSsnSDjix7RQEWzCGP9NQEn3dEwhsy")
+PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
