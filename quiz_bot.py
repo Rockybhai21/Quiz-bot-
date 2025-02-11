@@ -1,7 +1,7 @@
 import requests
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 from config import GEMINI_API_KEY, PEXELS_API_KEY, TELEGRAM_BOT_TOKEN
 
 # Enable logging
