@@ -1,6 +1,9 @@
 import requests
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import requests
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 from config import GEMINI_API_KEY, PEXELS_API_KEY, TELEGRAM_BOT_TOKEN
 
@@ -90,22 +93,15 @@ def button_handler(update: Update, context: CallbackContext):
 # Main function
 def main():
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("create_quiz", create_quiz))
-app.add_handler(CommandHandler("my_quizzes", my_quizzes))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-
-print("Bot is running...")
-app.run_polling()
-
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("create_quiz", create_quiz))
-    dp.add_handler(CommandHandler("my_quizzes", my_quizzes))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
-    dp.add_handler(CallbackQueryHandler(button_handler))
-    updater.start_polling()
-    updater.idle()
+    
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("create_quiz", create_quiz))
+    app.add_handler(CommandHandler("my_quizzes", my_quizzes))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
+    
+    print("Bot is running...")
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
