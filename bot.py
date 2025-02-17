@@ -12,6 +12,9 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Dictionary to store saved quizzes
+saved_quizzes = {}
+
 # Dummy HTTP server for health checks
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -58,21 +61,62 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         elif step == "correct_answer":
             if text.isdigit() and 1 <= int(text) <= 4:
                 context.user_data["quiz_correct"] = int(text) - 1
-                await update.message.reply_text("🎉 Quiz saved! Sending now...")
-
-                # Send the poll (quiz)
-                await update.message.chat.send_poll(
-                    question=context.user_data["quiz_question"],
-                    options=context.user_data["quiz_options"],
-                    type=Poll.QUIZ,
-                    correct_option_id=context.user_data["quiz_correct"],
-                    is_anonymous=False
-                )
-
-                # Clear quiz data
-                context.user_data.clear()
+                await update.message.reply_text("🎉 Quiz saved! Use /done to finalize or send more options.")
+                context.user_data["quiz_step"] = "done"
             else:
                 await update.message.reply_text("⚠️ Please send a valid number (1-4).")
+
+# Command to finalize quiz creation
+async def done(update: Update, context: CallbackContext) -> None:
+    if "quiz_question" in context.user_data:
+        quiz_id = f"quiz_{len(saved_quizzes) + 1}"
+        saved_quizzes[quiz_id] = {
+            "question": context.user_data["quiz_question"],
+            "options": context.user_data["quiz_options"],
+            "correct_answer": context.user_data["quiz_correct"]
+        }
+        await update.message.reply_text(f"✅ Quiz saved with ID: {quiz_id}. Use /start_quiz {quiz_id} to start it.")
+        context.user_data.clear()
+    else:
+        await update.message.reply_text("⚠️ No quiz to save. Use /create_quiz to start creating a quiz.")
+
+# Command to start a saved quiz
+async def start_saved_quiz(update: Update, context: CallbackContext) -> None:
+    if len(context.args) == 1:
+        quiz_id = context.args[0]
+        if quiz_id in saved_quizzes:
+            quiz = saved_quizzes[quiz_id]
+
+            # Send the poll
+            if update.message:
+                await update.message.reply_poll(
+                    question=quiz["question"],
+                    options=quiz["options"],
+                    type=Poll.QUIZ,
+                    correct_option_id=quiz["correct_answer"],
+                    is_anonymous=False
+                )
+            else:
+                await context.bot.send_poll(
+                    chat_id=update.effective_chat.id,
+                    question=quiz["question"],
+                    options=quiz["options"],
+                    type=Poll.QUIZ,
+                    correct_option_id=quiz["correct_answer"],
+                    is_anonymous=False
+                )
+        else:
+            await update.message.reply_text("⚠️ Quiz not found.")
+    else:
+        await update.message.reply_text("⚠️ Please provide a quiz ID. Use /list_quizzes to see available quizzes.")
+
+# Command to list saved quizzes
+async def list_quizzes(update: Update, context: CallbackContext) -> None:
+    if saved_quizzes:
+        quizzes_list = "\n".join([f"{quiz_id}: {saved_quizzes[quiz_id]['question']}" for quiz_id in saved_quizzes])
+        await update.message.reply_text(f"📚 Saved Quizzes:\n{quizzes_list}")
+    else:
+        await update.message.reply_text("📚 No quizzes saved yet.")
 
 # Main function
 def main():
@@ -86,6 +130,9 @@ def main():
     # Add command handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("create_quiz", create_quiz))
+    app.add_handler(CommandHandler("done", done))
+    app.add_handler(CommandHandler("start_quiz", start_saved_quiz))
+    app.add_handler(CommandHandler("list_quizzes", list_quizzes))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Start polling
