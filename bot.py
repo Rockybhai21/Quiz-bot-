@@ -3,8 +3,9 @@ import logging
 from telegram import Update, Poll
 from telegram.ext import Application, CommandHandler, CallbackContext, MessageHandler, filters
 
-# Load bot token from environment variable
+# Load environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Example: https://your-domain.com/webhook
 
 # Enable logging
 logging.basicConfig(
@@ -74,7 +75,13 @@ def main():
     app.add_handler(CommandHandler("create_quiz", create_quiz))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    app.run_polling()
+    # Use webhook on port 8080
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=8080,
+        url_path=BOT_TOKEN,  # Security: Use token as path
+        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"  # Full webhook URL
+    )
 
 if __name__ == "__main__":
     main()
