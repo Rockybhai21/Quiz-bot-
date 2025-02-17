@@ -1,11 +1,14 @@
 import os
 import logging
+import json
 from telegram import Update, Poll
-from telegram.ext import Application, CommandHandler, CallbackContext, MessageHandler, filters
+from telegram.ext import (
+    Application, CommandHandler, CallbackContext, MessageHandler, filters
+)
 
 # Load environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Example: https://your-domain.com/webhook
+QUIZ_STORAGE = "quizzes.json"  # File to store quizzes
 
 # Enable logging
 logging.basicConfig(
@@ -13,20 +16,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Dictionary to store saved quizzes
-saved_quizzes = {}
+# Function to load quizzes
+def load_quizzes():
+    if os.path.exists(QUIZ_STORAGE):
+        with open(QUIZ_STORAGE, "r") as file:
+            return json.load(file)
+    return []
+
+# Function to save quizzes
+def save_quizzes(quizzes):
+    with open(QUIZ_STORAGE, "w") as file:
+        json.dump(quizzes, file, indent=4)
 
 # Start command
 async def start(update: Update, context: CallbackContext) -> None:
     welcome_message = "🎉 Welcome to the Quiz Bot!\n\nUse /create_quiz to create a quiz."
     await update.message.reply_text(welcome_message)
 
-# Step 1: Ask the question
+# Start creating a quiz
 async def create_quiz(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text("📋 Please send your quiz question:")
     context.user_data["quiz_step"] = "question"
 
-# Step 2: Store question and ask for options
+# Handle quiz creation process
 async def handle_message(update: Update, context: CallbackContext) -> None:
     text = update.message.text
 
@@ -54,50 +66,46 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
         elif step == "correct_answer":
             if text.isdigit() and 1 <= int(text) <= 4:
                 context.user_data["quiz_correct"] = int(text) - 1
-                await update.message.reply_text("🎉 Quiz saved! Use /done to finalize or send more options.")
+                await update.message.reply_text("✅ Quiz data saved! Use /done to finalize and save the quiz.")
+
                 context.user_data["quiz_step"] = "done"
             else:
                 await update.message.reply_text("⚠️ Please send a valid number (1-4).")
 
-# Command to finalize quiz creation
+# Finalize quiz creation
 async def done(update: Update, context: CallbackContext) -> None:
-    if "quiz_question" in context.user_data:
-        quiz_id = f"quiz_{len(saved_quizzes) + 1}"
-        saved_quizzes[quiz_id] = {
+    if "quiz_question" in context.user_data and "quiz_options" in context.user_data:
+        quiz = {
             "question": context.user_data["quiz_question"],
             "options": context.user_data["quiz_options"],
-            "correct_answer": context.user_data["quiz_correct"]
+            "correct": context.user_data["quiz_correct"]
         }
-        await update.message.reply_text(f"✅ Quiz saved with ID: {quiz_id}. Use /start_quiz {quiz_id} to start it.")
+
+        quizzes = load_quizzes()
+        quizzes.append(quiz)
+        save_quizzes(quizzes)
+
+        await update.message.reply_text("🎉 Quiz saved! Use /start_quiz to start a saved quiz.")
         context.user_data.clear()
     else:
-        await update.message.reply_text("⚠️ No quiz to save. Use /create_quiz to start creating a quiz.")
+        await update.message.reply_text("⚠️ No quiz in progress. Use /create_quiz to start one.")
 
-# Command to start a saved quiz
+# List saved quizzes
 async def start_quiz(update: Update, context: CallbackContext) -> None:
-    if len(context.args) == 1:
-        quiz_id = context.args[0]
-        if quiz_id in saved_quizzes:
-            quiz = saved_quizzes[quiz_id]
-            await update.message.chat.send_poll(
-                question=quiz["question"],
-                options=quiz["options"],
-                type=Poll.QUIZ,
-                correct_option_id=quiz["correct_answer"],
-                is_anonymous=False
-            )
-        else:
-            await update.message.reply_text("⚠️ Quiz not found.")
-    else:
-        await update.message.reply_text("⚠️ Please provide a quiz ID. Use /list_quizzes to see available quizzes.")
+    quizzes = load_quizzes()
 
-# Command to list saved quizzes
-async def list_quizzes(update: Update, context: CallbackContext) -> None:
-    if saved_quizzes:
-        quizzes_list = "\n".join([f"{quiz_id}: {saved_quizzes[quiz_id]['question']}" for quiz_id in saved_quizzes])
-        await update.message.reply_text(f"📚 Saved Quizzes:\n{quizzes_list}")
-    else:
-        await update.message.reply_text("📚 No quizzes saved yet.")
+    if not quizzes:
+        await update.message.reply_text("⚠️ No saved quizzes. Use /create_quiz to create one.")
+        return
+
+    for i, quiz in enumerate(quizzes):
+        await update.message.reply_poll(
+            question=quiz["question"],
+            options=quiz["options"],
+            type=Poll.QUIZ,
+            correct_option_id=quiz["correct"],
+            is_anonymous=False
+        )
 
 # Main function
 def main():
@@ -107,12 +115,9 @@ def main():
     app.add_handler(CommandHandler("create_quiz", create_quiz))
     app.add_handler(CommandHandler("done", done))
     app.add_handler(CommandHandler("start_quiz", start_quiz))
-    app.add_handler(CommandHandler("list_quizzes", list_quizzes))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-   
     # Start polling
-    logger.info("Starting bot in polling mode...")
     app.run_polling()
 
 if __name__ == "__main__":
