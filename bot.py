@@ -1,56 +1,51 @@
 import os
 import logging
-from flask import Flask, request
-from telegram import Update, Bot
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackContext, MessageHandler, filters
 
-# Load environment variables
+# Load bot token from environment variable
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# Flask app for webhook handling
-app = Flask(__name__)
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-@app.route("/", methods=["GET"])
-def index():
-    return "Quiz Bot is Running!"
+# Define the /start command
+async def start(update: Update, context: CallbackContext) -> None:
+    welcome_message = "🎉 Welcome to the Quiz Bot! Use /crea_quiz to create a quiz."
+    await update.message.reply_text(welcome_message)
 
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(), bot)
-    application.update_queue.put(update)
-    return "OK", 200
+# Define the /crea_quiz command
+async def crea_quiz(update: Update, context: CallbackContext) -> None:
+    keyboard = [
+        [InlineKeyboardButton("Start Quiz", callback_data="start_quiz")],
+        [InlineKeyboardButton("Help", callback_data="help")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text("📋 Ready to create a quiz?", reply_markup=reply_markup)
 
-# Telegram bot setup
-bot = Bot(token=BOT_TOKEN)
-application = Application.builder().token(BOT_TOKEN).build()
+# Handle button clicks
+async def button_handler(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    await query.answer()
 
-logging.basicConfig(level=logging.INFO)
+    if query.data == "start_quiz":
+        await query.message.reply_text("🚀 Let's start your quiz! Send me a question.")
+    elif query.data == "help":
+        await query.message.reply_text("ℹ️ Use /crea_quiz to start quiz creation.")
 
-# Command Handlers
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Welcome to the Quiz Bot! Use /quiz to start.")
+# Main function to start the bot
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
 
-def quiz(update: Update, context: CallbackContext):
-    question = "What is the capital of France?\nA) Madrid\nB) Berlin\nC) Paris\nD) Rome"
-    context.user_data["answer"] = "C"
-    update.message.reply_text(question)
-
-def answer(update: Update, context: CallbackContext):
-    user_answer = update.message.text.strip().upper()
-    correct_answer = context.user_data.get("answer")
-    if user_answer == correct_answer:
-        update.message.reply_text("✅ Correct!")
-    else:
-        update.message.reply_text("❌ Wrong! Try again.")
-
-# Adding handlers
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("quiz", quiz))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, answer))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("crea_quiz", crea_quiz))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, crea_quiz))
+    
+    app.run_polling()
 
 if __name__ == "__main__":
-    # Set webhook
-    bot.set_webhook(f"{WEBHOOK_URL}/{BOT_TOKEN}")
-    logging.info("Bot started with webhook!")
-    app.run(host="0.0.0.0", port=8080)
+    main()
