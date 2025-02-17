@@ -1,6 +1,6 @@
 import os
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, Poll
 from telegram.ext import Application, CommandHandler, CallbackContext, MessageHandler, filters
 
 # Load bot token from environment variable
@@ -12,39 +12,68 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Define the /start command
+# Start command
 async def start(update: Update, context: CallbackContext) -> None:
-    welcome_message = "🎉 Welcome to the Quiz Bot! Use /crea_quiz to create a quiz."
+    welcome_message = "🎉 Welcome to the Quiz Bot!\n\nUse /create_quiz to create a quiz."
     await update.message.reply_text(welcome_message)
 
-# Define the /crea_quiz command
-async def crea_quiz(update: Update, context: CallbackContext) -> None:
-    keyboard = [
-        [InlineKeyboardButton("Start Quiz", callback_data="start_quiz")],
-        [InlineKeyboardButton("Help", callback_data="help")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text("📋 Ready to create a quiz?", reply_markup=reply_markup)
+# Step 1: Ask the question
+async def create_quiz(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text("📋 Please send your quiz question:")
+    context.user_data["quiz_step"] = "question"
 
-# Handle button clicks
-async def button_handler(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    await query.answer()
+# Step 2: Store question and ask for options
+async def handle_message(update: Update, context: CallbackContext) -> None:
+    text = update.message.text
 
-    if query.data == "start_quiz":
-        await query.message.reply_text("🚀 Let's start your quiz! Send me a question.")
-    elif query.data == "help":
-        await query.message.reply_text("ℹ️ Use /crea_quiz to start quiz creation.")
+    if "quiz_step" in context.user_data:
+        step = context.user_data["quiz_step"]
 
-# Main function to start the bot
+        if step == "question":
+            context.user_data["quiz_question"] = text
+            context.user_data["quiz_options"] = []
+            await update.message.reply_text("✅ Question saved! Now send up to **4 options** one by one.")
+            context.user_data["quiz_step"] = "options"
+
+        elif step == "options":
+            if len(context.user_data["quiz_options"]) < 4:
+                context.user_data["quiz_options"].append(text)
+
+                if len(context.user_data["quiz_options"]) == 4:
+                    await update.message.reply_text(
+                        "🎯 Now send the correct option number (1, 2, 3, or 4)."
+                    )
+                    context.user_data["quiz_step"] = "correct_answer"
+                else:
+                    await update.message.reply_text(f"✅ Option {len(context.user_data['quiz_options'])} saved! Send another option.")
+
+        elif step == "correct_answer":
+            if text.isdigit() and 1 <= int(text) <= 4:
+                context.user_data["quiz_correct"] = int(text) - 1
+                await update.message.reply_text("🎉 Quiz saved! Sending now...")
+                
+                # Send the poll (quiz)
+                await update.message.chat.send_poll(
+                    question=context.user_data["quiz_question"],
+                    options=context.user_data["quiz_options"],
+                    type=Poll.QUIZ,
+                    correct_option_id=context.user_data["quiz_correct"],
+                    is_anonymous=False
+                )
+
+                # Clear quiz data
+                context.user_data.clear()
+            else:
+                await update.message.reply_text("⚠️ Please send a valid number (1-4).")
+
+# Main function
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("crea_quiz", crea_quiz))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, crea_quiz))
-    
+    app.add_handler(CommandHandler("create_quiz", create_quiz))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
     app.run_polling()
 
 if __name__ == "__main__":
