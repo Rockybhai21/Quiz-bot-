@@ -110,13 +110,10 @@ def main():
     app.add_handler(CommandHandler("list_quizzes", list_quizzes))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Use webhook on port 8080
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=8080,
-        url_path=BOT_TOKEN,  # Security: Use token as path
-        webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"  # Full webhook URL
-    )
+   
+    # Start polling
+    logger.info("Starting bot in polling mode...")
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
