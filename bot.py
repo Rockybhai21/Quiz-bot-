@@ -1,9 +1,9 @@
 import os
 import logging
 import json
-from telegram import Update, Poll
+from telegram import Update, Poll, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application, CommandHandler, CallbackContext, MessageHandler, filters
+    Application, CommandHandler, CallbackContext, MessageHandler, filters, CallbackQueryHandler
 )
 
 # Load environment variables
@@ -85,26 +85,43 @@ async def done(update: Update, context: CallbackContext) -> None:
         quizzes.append(quiz)
         save_quizzes(quizzes)
 
-        await update.message.reply_text("🎉 Quiz saved! Use /start_quiz to start a saved quiz.")
+        await update.message.reply_text("🎉 Quiz saved! You can now start a saved quiz. Use the button below to start it.")
+
+        # Send options to start saved quizzes
+        keyboard = [
+            [
+                InlineKeyboardButton(text="Start Saved Quiz", callback_data="start_saved_quiz")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("🎯 Click below to start a quiz!", reply_markup=reply_markup)
+        
         context.user_data.clear()
     else:
         await update.message.reply_text("⚠️ No quiz in progress. Use /create_quiz to start one.")
 
-# List saved quizzes
-async def start_quiz(update: Update, context: CallbackContext) -> None:
+# Handle starting the saved quiz
+async def start_saved_quiz(update: Update, context: CallbackContext) -> None:
     quizzes = load_quizzes()
 
     if not quizzes:
         await update.message.reply_text("⚠️ No saved quizzes. Use /create_quiz to create one.")
         return
 
+    # If there are saved quizzes, send them as a poll
     for i, quiz in enumerate(quizzes):
+        keyboard = [
+            InlineKeyboardButton(text="Start", callback_data=f"quiz_{i}")
+        ]
+        reply_markup = InlineKeyboardMarkup([keyboard])
+        
         await update.message.reply_poll(
             question=quiz["question"],
             options=quiz["options"],
             type=Poll.QUIZ,
             correct_option_id=quiz["correct"],
-            is_anonymous=False
+            is_anonymous=False,
+            reply_markup=reply_markup
         )
 
 # Main function
@@ -114,8 +131,9 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("create_quiz", create_quiz))
     app.add_handler(CommandHandler("done", done))
-    app.add_handler(CommandHandler("start_quiz", start_quiz))
+    app.add_handler(CommandHandler("start_quiz", start_saved_quiz))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(start_saved_quiz, pattern="start_saved_quiz"))
 
     # Start polling
     app.run_polling()
