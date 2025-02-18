@@ -4,13 +4,13 @@ import json
 import random
 import string
 from flask import Flask, request
-from telegram import Update, Poll, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, CallbackContext, MessageHandler, filters, CallbackQueryHandler
 
 # Load environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Set your webhook URL
-PORT = int(os.getenv("PORT", 8443))  # Default Flask port
+PORT = int(os.getenv("PORT", 8080))  # Default port for Koyeb
 
 # Enable logging
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
