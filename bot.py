@@ -2,6 +2,7 @@ import os
 import logging
 import json
 import threading
+import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram import Update, Poll
 from telegram.ext import Application, CommandHandler, CallbackContext, MessageHandler, filters
@@ -60,12 +61,12 @@ async def help_command(update: Update, context: CallbackContext) -> None:
 
 # Create quiz command
 async def create_quiz(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text("📋 Please send the quiz category:")
+    await update.message.reply_text("🌹 Please send the quiz category:")
     context.user_data["quiz_step"] = "category"
     context.user_data["quiz_questions"] = []  # Store multiple questions
     context.user_data["quiz_category"] = None
 
-# Handle messages for multiple questions
+# Handle messages for multiple questions in a single message
 async def handle_message(update: Update, context: CallbackContext) -> None:
     text = update.message.text
 
@@ -74,38 +75,40 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
 
         if step == "category":
             context.user_data["quiz_category"] = text
-            await update.message.reply_text("✅ Category saved! Now send the first question.")
-            context.user_data["quiz_step"] = "question"
+            await update.message.reply_text("✅ Category saved! Now send a full question with options (use ✅ for the correct answer). Example:\n\n"
+                                            "**What is the capital of India?**\nNew Delhi ✅\nKolkata\nMadurai\nChennai")
+            context.user_data["quiz_step"] = "questions"
 
-        elif step == "question":
-            context.user_data["current_question"] = text
-            context.user_data["current_options"] = []
-            await update.message.reply_text("✅ Question saved! Now send up to 4 options one by one.")
-            context.user_data["quiz_step"] = "options"
+        elif step == "questions":
+            # Parse question and options
+            lines = text.strip().split("\n")
+            if len(lines) < 2:
+                await update.message.reply_text("⚠️ Please send a question followed by at least two options.")
+                return
 
-        elif step == "options":
-            if len(context.user_data["current_options"]) < 4:
-                context.user_data["current_options"].append(text)
+            question = lines[0]
+            options = []
+            correct_answer = None
 
-                if len(context.user_data["current_options"]) == 4:
-                    await update.message.reply_text("🎯 Now send the correct option number (1, 2, 3, or 4).")
-                    context.user_data["quiz_step"] = "correct_answer"
-                else:
-                    await update.message.reply_text(f"✅ Option {len(context.user_data['current_options'])} saved! Send another option.")
+            # Extract options and find the correct answer
+            for i, line in enumerate(lines[1:5]):  # Max 4 options
+                if "✅" in line:
+                    correct_answer = i
+                    line = line.replace("✅", "").strip()  # Remove check mark
+                options.append(line.strip())
 
-        elif step == "correct_answer":
-            if text.isdigit() and 1 <= int(text) <= 4:
-                correct_answer = int(text) - 1
-                context.user_data["quiz_questions"].append({
-                    "question": context.user_data["current_question"],
-                    "options": context.user_data["current_options"],
-                    "correct_answer": correct_answer
-                })
+            if correct_answer is None:
+                await update.message.reply_text("⚠️ Please mark the correct answer with ✅.")
+                return
 
-                await update.message.reply_text("✅ Question saved! Send another question or use /done to finalize.")
-                context.user_data["quiz_step"] = "question"
-            else:
-                await update.message.reply_text("⚠️ Please send a valid number (1-4).")
+            # Save question
+            context.user_data["quiz_questions"].append({
+                "question": question,
+                "options": options,
+                "correct_answer": correct_answer
+            })
+
+            await update.message.reply_text("✅ Question added! Send another question or use /done to finalize.")
 
 # Command to finalize and save the quiz
 async def done(update: Update, context: CallbackContext) -> None:
