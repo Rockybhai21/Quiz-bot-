@@ -5,26 +5,25 @@ import random
 import string
 from flask import Flask, request
 from telegram import Update, Poll, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import (
-    Application, CommandHandler, CallbackContext, MessageHandler,
-    filters, CallbackQueryHandler
-)
+from telegram.ext import Application, CommandHandler, CallbackContext, MessageHandler, filters, CallbackQueryHandler
 
 # Load environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://yourdomain.com
-PORT = int(os.getenv("PORT", 8443))  # Default port
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Set your webhook URL
+PORT = int(os.getenv("PORT", 8443))  # Default Flask port
 
 # Enable logging
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Flask App for handling webhooks
+# Flask app
 app = Flask(__name__)
+
+# Telegram Bot
+tg_app = Application.builder().token(BOT_TOKEN).build()
 
 # Dictionary to store quizzes
 saved_quizzes = {}
-user_quiz_sessions = {}
 
 # Load quizzes from JSON file
 def load_quizzes_from_file():
@@ -92,81 +91,28 @@ async def done(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(f"✅ Quiz saved with ID: {quiz_id}\nUse /start_quiz {quiz_id} to start it anytime.", reply_markup=reply_markup)
     context.user_data.clear()
 
-# Start saved quiz
-async def start_saved_quiz(update: Update, context: CallbackContext) -> None:
-    if len(context.args) != 1:
-        await update.message.reply_text("⚠️ Please provide a quiz ID. Example: /start_quiz quiz_ABC123")
-        return
-    
-    quiz_id = context.args[0]
-    if quiz_id not in saved_quizzes:
-        await update.message.reply_text("⚠️ Quiz not found!")
-        return
-    
-    context.user_data["current_quiz"] = quiz_id
-    context.user_data["question_index"] = 0
-    await send_next_question(update, context)
+# Set Webhook
+async def set_webhook():
+    await tg_app.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
 
-async def send_next_question(update: Update, context: CallbackContext):
-    quiz_id = context.user_data["current_quiz"]
-    index = context.user_data["question_index"]
-    quiz = saved_quizzes[quiz_id]
+@app.route("/webhook", methods=["POST"])
+async def webhook():
+    update = Update.de_json(request.get_json(), tg_app.bot)
+    await tg_app.process_update(update)
+    return "OK"
 
-    if index >= len(quiz):
-        await update.message.reply_text("🎉 Quiz completed!")
-        return
-    
-    question_data = quiz[index]
-    await update.message.reply_poll(
-        question=question_data["question"],
-        options=question_data["options"],
-        type=Poll.QUIZ,
-        correct_option_id=question_data["correct_answer"],
-        is_anonymous=False
-    )
-    
-    context.user_data["question_index"] += 1
-
-# Callback for quiz start buttons
-async def button_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    await query.answer()
-    if query.data.startswith("start_quiz_"):
-        quiz_id = query.data.replace("start_quiz_", "")
-        context.user_data["current_quiz"] = quiz_id
-        context.user_data["question_index"] = 0
-        await send_next_question(query.message, context)
-
-# Telegram Bot Initialization
-telegram_app = Application.builder().token(BOT_TOKEN).build()
-
-telegram_app.add_handler(CommandHandler("start", start))
-telegram_app.add_handler(CommandHandler("create_quiz", create_quiz))
-telegram_app.add_handler(CommandHandler("done", done))
-telegram_app.add_handler(CommandHandler("start_quiz", start_saved_quiz))
-telegram_app.add_handler(CallbackQueryHandler(button_callback))
-telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-# Flask Webhook Endpoint
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def webhook():
-    """Process incoming webhook updates from Telegram."""
-    update = Update.de_json(request.get_json(), telegram_app.bot)
-    telegram_app.update_queue.put(update)
-    return "OK", 200
-
-# Set Webhook in Telegram
-def set_webhook():
-    """Register webhook with Telegram."""
-    webhook_url = f"{WEBHOOK_URL}/{BOT_TOKEN}"
-    response = telegram_app.bot.set_webhook(url=webhook_url)
-    if response:
-        logger.info(f"Webhook set successfully: {webhook_url}")
-    else:
-        logger.error(f"Failed to set webhook: {webhook_url}")
-
-# Start Flask Server & Register Webhook
-if __name__ == "__main__":
+# Main function
+async def main():
     load_quizzes_from_file()
-    set_webhook()
+    await set_webhook()
+
+    tg_app.add_handler(CommandHandler("start", start))
+    tg_app.add_handler(CommandHandler("create_quiz", create_quiz))
+    tg_app.add_handler(CommandHandler("done", done))
+    tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
     app.run(host="0.0.0.0", port=PORT)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
