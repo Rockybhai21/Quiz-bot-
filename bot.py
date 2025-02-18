@@ -17,9 +17,8 @@ logger = logging.getLogger(__name__)
 # Initialize bot application
 app = Application.builder().token(BOT_TOKEN).build()
 
-# Dictionary to store quizzes and countdowns
+# Dictionary to store quizzes
 quizzes = {}
-countdowns = {}
 
 # Load quizzes from file
 def load_quizzes():
@@ -87,63 +86,17 @@ async def done(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(f"✅ Quiz saved with ID: {quiz_id}\nUse /start_quiz {quiz_id} to start.", reply_markup=reply_markup)
     context.user_data.clear()
 
-# Countdown command with confirm/modify buttons
-async def countdown(update: Update, context: CallbackContext) -> None:
-    try:
-        args = context.args
-        if not args or not args[0].isdigit():
-            await update.message.reply_text("⚠️ Provide seconds. Example: /countdown 10")
-            return
-
-        seconds = int(args[0])
-        chat_id = update.message.chat_id
-
-        keyboard = [
-            [InlineKeyboardButton("✅ Confirm", callback_data=f"confirm_{chat_id}_{seconds}")],
-            [InlineKeyboardButton("✏ Modify", callback_data="modify_countdown")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        await update.message.reply_text(f"⏳ Countdown: {seconds}s\nDo you want to start?", reply_markup=reply_markup)
-
-    except Exception as e:
-        logger.error(f"Error in countdown: {e}")
-
-# Handle countdown callbacks
-async def button_callback(update: Update, context: CallbackContext) -> None:
-    query = update.callback_query
-    await query.answer()
-
-    data = query.data.split("_")
-    
-    if data[0] == "confirm":
-        chat_id = int(data[1])
-        seconds = int(data[2])
-
-        message = await query.message.edit_text(f"⏳ Countdown: {seconds}s remaining...")
-
-        while seconds > 0:
-            await asyncio.sleep(1)
-            seconds -= 1
-            await message.edit_text(f"⏳ Countdown: {seconds}s remaining...")
-
-        await message.edit_text("🎉 TIME'S UP!")
-
-    elif data[0] == "modify":
-        await query.message.edit_text("✏ Modify countdown time with /countdown <seconds>")
-
 # Start polling loop
 async def main():
     load_quizzes()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("create_quiz", create_quiz))
     app.add_handler(CommandHandler("done", done))
-    app.add_handler(CommandHandler("countdown", countdown))
-    app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("Bot is running in polling mode...")
     await app.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())  # ✅ FIXED: Uses existing event loop
