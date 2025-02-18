@@ -11,5 +11,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the bot files
 COPY . .
 
-# Run the bot using Gunicorn
-CMD ["gunicorn", "-b", "0.0.0.0:8443", "bot:app"]
+# Run the bot using Python (polling mode)
+CMD ["python", "bot.py"]
