@@ -94,15 +94,19 @@ async def main():
     app.add_handler(CommandHandler("done", done))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+    print("🚀 Bot is starting in polling mode...")
+    
+    await app.run_polling(allowed_updates=Update.ALL_TYPES)
     logger.info("Bot is running in polling mode...")
     await app.run_polling()
 
 if __name__ == "__main__":
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
+        print("⚠️ Event loop already running. Creating task...")
+        asyncio.create_task(main())  # ✅ Schedules the bot to run
     except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        print("✅ No event loop found. Running main()...")
+        asyncio.run(main())  # ✅ Runs only if no loop exists
 
-    loop.create_task(main())  # ✅ Runs main() without stopping existing loop
-    loop.run_forever()        # ✅ Keeps the bot running without closing the loop
+    print("🔥 Bot is running!")
