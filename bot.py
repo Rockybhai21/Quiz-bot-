@@ -30,7 +30,7 @@ def run_http_server():
 # Save quizzes to JSON file
 def save_quizzes_to_file():
     with open("quizzes.json", "w") as file:
-        json.dump(saved_quizzes, file)
+        json.dump(saved_quizzes, file, indent=4)
 
 # Load quizzes from JSON file
 def load_quizzes_from_file():
@@ -43,15 +43,15 @@ def load_quizzes_from_file():
 
 # Start command
 async def start(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text("🎉 Welcome to the Quiz Bot! Use /create_quiz to create a quiz.")
+    await update.message.reply_text("🎉 Welcome to the Quiz Bot! Use /create_quiz to start creating a quiz.")
 
 # Help command
 async def help_command(update: Update, context: CallbackContext) -> None:
     help_text = """
 📚 **Quiz Bot Commands**:
 - /start - Start the bot.
-- /create_quiz - Create a new quiz.
-- /done - Save the quiz.
+- /create_quiz - Start creating a quiz with multiple questions.
+- /done - Save all added questions and finalize the quiz.
 - /start_quiz <quiz_id> - Start a saved quiz.
 - /list_quizzes - List all saved quizzes.
 - /help - Show this help message.
@@ -60,61 +60,66 @@ async def help_command(update: Update, context: CallbackContext) -> None:
 
 # Create quiz command
 async def create_quiz(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text("📋 Please send your quiz question:")
-    context.user_data["quiz_step"] = "question"
-    context.user_data["quiz_category"] = None  # Initialize category
+    await update.message.reply_text("📋 Please send the quiz category:")
+    context.user_data["quiz_step"] = "category"
+    context.user_data["quiz_questions"] = []  # Store multiple questions
+    context.user_data["quiz_category"] = None
 
-# Handle messages
+# Handle messages for multiple questions
 async def handle_message(update: Update, context: CallbackContext) -> None:
     text = update.message.text
 
     if "quiz_step" in context.user_data:
         step = context.user_data["quiz_step"]
 
-        if step == "question":
-            context.user_data["quiz_question"] = text
-            context.user_data["quiz_options"] = []
-            await update.message.reply_text("✅ Question saved! Now send the category for this quiz:")
-            context.user_data["quiz_step"] = "category"
-
-        elif step == "category":
+        if step == "category":
             context.user_data["quiz_category"] = text
-            await update.message.reply_text("✅ Category saved! Now send up to 4 options one by one.")
+            await update.message.reply_text("✅ Category saved! Now send the first question.")
+            context.user_data["quiz_step"] = "question"
+
+        elif step == "question":
+            context.user_data["current_question"] = text
+            context.user_data["current_options"] = []
+            await update.message.reply_text("✅ Question saved! Now send up to 4 options one by one.")
             context.user_data["quiz_step"] = "options"
 
         elif step == "options":
-            if len(context.user_data["quiz_options"]) < 4:
-                context.user_data["quiz_options"].append(text)
+            if len(context.user_data["current_options"]) < 4:
+                context.user_data["current_options"].append(text)
 
-                if len(context.user_data["quiz_options"]) == 4:
+                if len(context.user_data["current_options"]) == 4:
                     await update.message.reply_text("🎯 Now send the correct option number (1, 2, 3, or 4).")
                     context.user_data["quiz_step"] = "correct_answer"
                 else:
-                    await update.message.reply_text(f"✅ Option {len(context.user_data['quiz_options'])} saved! Send another option.")
+                    await update.message.reply_text(f"✅ Option {len(context.user_data['current_options'])} saved! Send another option.")
 
         elif step == "correct_answer":
             if text.isdigit() and 1 <= int(text) <= 4:
-                context.user_data["quiz_correct"] = int(text) - 1
-                await update.message.reply_text("🎉 Quiz saved! Use /done to finalize or send more options.")
-                context.user_data["quiz_step"] = "done"
+                correct_answer = int(text) - 1
+                context.user_data["quiz_questions"].append({
+                    "question": context.user_data["current_question"],
+                    "options": context.user_data["current_options"],
+                    "correct_answer": correct_answer
+                })
+
+                await update.message.reply_text("✅ Question saved! Send another question or use /done to finalize.")
+                context.user_data["quiz_step"] = "question"
             else:
                 await update.message.reply_text("⚠️ Please send a valid number (1-4).")
 
-# Command to finalize quiz creation
+# Command to finalize and save the quiz
 async def done(update: Update, context: CallbackContext) -> None:
-    if "quiz_question" in context.user_data:
+    if context.user_data["quiz_questions"]:
         quiz_id = f"quiz_{len(saved_quizzes) + 1}"
         saved_quizzes[quiz_id] = {
-            "question": context.user_data["quiz_question"],
-            "options": context.user_data["quiz_options"],
-            "correct_answer": context.user_data["quiz_correct"],
-            "category": context.user_data["quiz_category"]  # Add category
+            "category": context.user_data["quiz_category"],
+            "questions": context.user_data["quiz_questions"]
         }
         save_quizzes_to_file()  # Save quizzes to file
         await update.message.reply_text(f"✅ Quiz saved with ID: {quiz_id}. Use /start_quiz {quiz_id} to start it.")
         context.user_data.clear()
     else:
-        await update.message.reply_text("⚠️ No quiz to save. Use /create_quiz to start creating a quiz.")
+        await update.message.reply_text("⚠️ No questions added. Use /create_quiz to start adding questions.")
 
 # Command to start a saved quiz
 async def start_saved_quiz(update: Update, context: CallbackContext) -> None:
@@ -123,22 +128,12 @@ async def start_saved_quiz(update: Update, context: CallbackContext) -> None:
         if quiz_id in saved_quizzes:
             quiz = saved_quizzes[quiz_id]
 
-            # Send the poll
-            if update.message:
+            for question in quiz["questions"]:
                 await update.message.reply_poll(
-                    question=quiz["question"],
-                    options=quiz["options"],
+                    question=question["question"],
+                    options=question["options"],
                     type=Poll.QUIZ,
-                    correct_option_id=quiz["correct_answer"],
-                    is_anonymous=False
-                )
-            else:
-                await context.bot.send_poll(
-                    chat_id=update.effective_chat.id,
-                    question=quiz["question"],
-                    options=quiz["options"],
-                    type=Poll.QUIZ,
-                    correct_option_id=quiz["correct_answer"],
+                    correct_option_id=question["correct_answer"],
                     is_anonymous=False
                 )
         else:
@@ -149,7 +144,7 @@ async def start_saved_quiz(update: Update, context: CallbackContext) -> None:
 # Command to list saved quizzes
 async def list_quizzes(update: Update, context: CallbackContext) -> None:
     if saved_quizzes:
-        quizzes_list = "\n".join([f"{quiz_id}: {saved_quizzes[quiz_id]['question']} (Category: {saved_quizzes[quiz_id]['category']})" for quiz_id in saved_quizzes])
+        quizzes_list = "\n".join([f"{quiz_id}: {saved_quizzes[quiz_id]['category']}" for quiz_id in saved_quizzes])
         await update.message.reply_text(f"📚 Saved Quizzes:\n{quizzes_list}")
     else:
         await update.message.reply_text("📚 No quizzes saved yet.")
