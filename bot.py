@@ -10,7 +10,7 @@ from telegram.ext import Application, CommandHandler, CallbackContext, MessageHa
 # Load environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Set your webhook URL
-PORT = int(os.getenv("PORT", 8080))  # Default port for Koyeb
+PORT = int(os.getenv("PORT", 8080))  # Use 8080 for Koyeb
 
 # Enable logging
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
