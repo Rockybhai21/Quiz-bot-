@@ -1,18 +1,18 @@
-# Use official Python image as a base
+# Use official Python image
 FROM python:3.11-slim
 
-# Set the working directory inside the container
+# Set working directory
 WORKDIR /app
 
-# Copy requirements file and install dependencies
+# Copy and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy bot code into the container
+# Copy the bot files
 COPY . .
 
-# Expose the Flask port (default 8443)
+# Expose the Flask port
 EXPOSE 8443
 
-# Command to run the application
-CMD ["python", "bot.py"]
+# Run the bot using Gunicorn
+CMD ["gunicorn", "-b", "0.0.0.0:8443", "bot:app"]
