@@ -3,3 +3,5 @@ python-dotenv==1.0.0
 requests
 flask
 python-telegram-bot[webhooks]
+python-telegram-bot[ext]
+gunicorn
