@@ -11,8 +11,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the bot files
 COPY . .
 
-# Expose the Flask port
-EXPOSE 8443
-
 # Run the bot using Gunicorn
 CMD ["gunicorn", "-b", "0.0.0.0:8443", "bot:app"]
