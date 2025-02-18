@@ -3,24 +3,18 @@ import logging
 import json
 import random
 import string
-from flask import Flask, request
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, CallbackContext, MessageHandler, filters, CallbackQueryHandler
 
 # Load environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Set your webhook URL
-PORT = int(os.getenv("PORT", 8080))  # Use 8080 for Koyeb
 
 # Enable logging
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Flask app
-app = Flask(__name__)
-
 # Telegram Bot
-tg_app = Application.builder().token(BOT_TOKEN).build()
+app = Application.builder().token(BOT_TOKEN).build()
 
 # Dictionary to store quizzes
 saved_quizzes = {}
@@ -91,28 +85,16 @@ async def done(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(f"✅ Quiz saved with ID: {quiz_id}\nUse /start_quiz {quiz_id} to start it anytime.", reply_markup=reply_markup)
     context.user_data.clear()
 
-# Set Webhook
-async def set_webhook():
-    await tg_app.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook")
-
-@app.route("/webhook", methods=["POST"])
-async def webhook():
-    update = Update.de_json(request.get_json(), tg_app.bot)
-    await tg_app.process_update(update)
-    return "OK"
-
 # Main function
-async def main():
+def main():
     load_quizzes_from_file()
-    await set_webhook()
-
-    tg_app.add_handler(CommandHandler("start", start))
-    tg_app.add_handler(CommandHandler("create_quiz", create_quiz))
-    tg_app.add_handler(CommandHandler("done", done))
-    tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    app.run(host="0.0.0.0", port=PORT)
+    
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("create_quiz", create_quiz))
+    app.add_handler(CommandHandler("done", done))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    app.run_polling()
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
